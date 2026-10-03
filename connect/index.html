@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08060f">
+  <meta name="description" content="Choose a time to talk with Epic Podcast about your show.">
+  <link rel="canonical" href="https://epicpodcast.show/connect/">
+  <link rel="preconnect" href="https://app.cal.com">
+  <link rel="preconnect" href="https://cal.com">
+  <link rel="dns-prefetch" href="//app.cal.com">
+  <link rel="preload" href="https://app.cal.com/embed/embed.js" as="script">
+  <title>Book a conversation | Epic Podcast</title>
+  <link rel="stylesheet" href="/assets/site.css?v=epic-nav-20261003-speed6">
+</head>
+<body>
+<header class="site-header"><a class="brand" href="/" aria-label="Epic Podcast home"><img class="brand-logo" src="/assets/epic-podcast-logo.png" alt="Epic Podcast"></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu"><span></span><span></span></button><nav class="site-nav" id="site-nav" aria-label="Main navigation"><a href="/">Home</a><a href="/process/">Studio</a><a href="/case-studies/">Work</a><a href="/about/">About</a><a href="/#work">Trust</a><a href="/connect/" aria-current="page">Connect</a></nav></header>
+<main>
+  <section class="wrap page-hero booking-hero">
+    <h1>Let’s talk about your <span class="gradient-text">show.</span></h1>
+    <p class="lede">Choose a time that works for you.</p>
+  </section>
+  <section class="wrap booking-section" aria-label="Book a meeting with Epic Podcast">
+    <div class="booking-calendar"><div class="booking-calendar-embed" id="my-cal-inline" aria-label="Cal.com booking calendar"></div></div>
+    <noscript><p>JavaScript is required to load the booking calendar. <a href="https://cal.com/ronnie-h/30min">Open the calendar on Cal.com</a>.</p></noscript>
+  </section>
+  <script>
+  (function (C, A, L) { let p = function (a, ar) { a.q.push(ar); }; let d = C.document; C.Cal = C.Cal || function () { let cal = C.Cal; let ar = arguments; if (!cal.loaded) { cal.ns = {}; cal.q = cal.q || []; d.head.appendChild(d.createElement("script")).src = A; cal.loaded = true; } if (ar[0] === L) { const api = function () { p(api, arguments); }; const namespace = ar[1]; api.q = api.q || []; cal.ns[namespace] = api; p(api, ar); p(cal, ["initNamespace", namespace]); return; } p(cal, ar); }; })(window, "https://app.cal.com/embed/embed.js", "init");
+  Cal("init", "epic-booking", { origin: "https://cal.com" });
+  Cal.ns["epic-booking"]("inline", { elementOrSelector: "#my-cal-inline", calLink: "ronnie-h/30min", layout: "month_view" });
+  Cal.ns["epic-booking"]("ui", { theme: "dark", styles: { branding: { brandColor: "#4800ce" } }, hideEventTypeDetails: false, layout: "month_view" });
+  </script>
+</main>
+<footer class="site-footer"><div class="footer-top"><div><a class="brand" href="/" aria-label="Epic Podcast home"><img class="brand-logo" src="/assets/epic-podcast-logo.png" alt="Epic Podcast"></a><p class="footer-promise">End-to-end production for podcasts with a point of view.</p></div><div class="footer-columns"><div class="footer-column"><h3>Who we work with</h3><a href="/venture-capital/">Venture capital</a><a href="/founders/">Startup founders</a></div><div class="footer-column"><h3>Explore</h3><a href="/process/">Studio</a><a href="/case-studies/">Work</a><a href="/about/">About</a></div><div class="footer-column"><h3>Connect</h3><a href="https://cal.com/ronnie-h/30min">Book a conversation ↗</a></div></div></div><div class="footer-bottom"><span>© <span data-year>2026</span> Epic Podcast</span><span>Ideas deserve good conversations.</span></div></footer>
+<script src="/assets/site.js?v=epic-nav-20261003-speed6" defer></script>
+</body>
+</html>

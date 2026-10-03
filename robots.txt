@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://epicpodcast.show/sitemap.xml
