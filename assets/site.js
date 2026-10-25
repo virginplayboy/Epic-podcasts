@@ -208,7 +208,7 @@
     let activeDirection = 0;
     let resetTimer;
     let navigating = false;
-    const navigateAt = 76;
+    const navigateAt = 54;
     const resetSwipe = () => {
       window.clearTimeout(resetTimer);
       accumulatedX = 0;
@@ -216,11 +216,10 @@
       swipeRing.classList.remove('is-visible');
       swipeRing.classList.remove('from-left', 'from-right');
     };
-    const registerSwipeDelta = (deltaX, event) => {
+    const registerSwipeDelta = (deltaX) => {
       if (!deltaX || navigating) return;
       const direction = deltaX > 0 ? 1 : -1;
       const destination = swipePages[currentPageIndex + direction];
-      if (event?.cancelable) event.preventDefault();
       if (!destination) {
         resetSwipe();
         return;
@@ -249,17 +248,22 @@
       }
       resetTimer = window.setTimeout(resetSwipe, 850);
     };
-    window.addEventListener('wheel', (event) => {
-      if (navigating) {
-        if (Math.abs(event.deltaX) > Math.abs(event.deltaY) * 1.1) event.preventDefault();
-        return;
-      }
+    const onTrackpadWheel = (event) => {
       const deltaX = event.deltaX * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerWidth : 1);
       const deltaY = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1);
-      if (Math.abs(deltaX) < 1 || Math.abs(deltaX) < Math.abs(deltaY) * 0.72) return;
       if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], [data-horizontal-scroll]')) return;
-      registerSwipeDelta(deltaX, event);
-    }, { passive: false });
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+
+      // Safari's back/forward trackpad gesture is driven by the same wheel
+      // stream. Cancel its native action on the first horizontal-dominant
+      // sample, before waiting for enough distance to switch our own page.
+      if (absX < 0.1 || absX < absY * 0.2) return;
+      if (event.cancelable) event.preventDefault();
+      if (navigating || absX < 0.5 || absX < absY * 0.72) return;
+      registerSwipeDelta(deltaX);
+    };
+    document.addEventListener('wheel', onTrackpadWheel, { capture: true, passive: false });
 
     let touchStart = null;
     let touchLast = null;
