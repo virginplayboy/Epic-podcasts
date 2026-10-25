@@ -202,21 +202,13 @@
     const swipeRing = document.createElement('div');
     swipeRing.className = 'page-swipe-ring';
     swipeRing.setAttribute('aria-hidden', 'true');
-    swipeRing.innerHTML = '<span></span><span></span>';
     document.body.append(swipeRing);
-
-    const adjacentPages = [swipePages[currentPageIndex - 1], swipePages[currentPageIndex + 1]];
-    adjacentPages.filter(Boolean).forEach((page) => {
-      const hint = document.createElement('link');
-      hint.rel = 'prefetch';
-      hint.href = page.path;
-      document.head.append(hint);
-    });
 
     let accumulatedX = 0;
     let activeDirection = 0;
     let resetTimer;
     let navigating = false;
+    const navigateAt = 76;
     const resetSwipe = () => {
       window.clearTimeout(resetTimer);
       accumulatedX = 0;
@@ -224,19 +216,11 @@
       swipeRing.classList.remove('is-visible');
       swipeRing.classList.remove('from-left', 'from-right');
     };
-    window.addEventListener('wheel', (event) => {
-      if (navigating) {
-        if (Math.abs(event.deltaX) > Math.abs(event.deltaY) * 1.2) event.preventDefault();
-        return;
-      }
-      const deltaX = event.deltaX * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerWidth : 1);
-      const deltaY = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1);
-      if (Math.abs(deltaX) < 8 || Math.abs(deltaX) < Math.abs(deltaY) * 1.25) return;
-      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], [data-horizontal-scroll]')) return;
-
+    const registerSwipeDelta = (deltaX, event) => {
+      if (!deltaX || navigating) return;
       const direction = deltaX > 0 ? 1 : -1;
       const destination = swipePages[currentPageIndex + direction];
-      if (event.cancelable) event.preventDefault();
+      if (event?.cancelable) event.preventDefault();
       if (!destination) {
         resetSwipe();
         return;
@@ -249,25 +233,61 @@
         swipeRing.classList.add(direction > 0 ? 'from-right' : 'from-left');
       }
       accumulatedX += Math.abs(deltaX);
-      const swipeProgress = Math.min(1, Math.max(accumulatedX / 110, Math.abs(deltaX) / 80));
-      swipeRing.style.setProperty('--swipe-opacity', (0.24 + swipeProgress * 0.76).toFixed(3));
-      swipeRing.style.setProperty('--swipe-scale', (0.82 + swipeProgress * 0.18).toFixed(3));
-      swipeRing.style.setProperty('--swipe-blur', `${20 + swipeProgress * 64}px`);
-      swipeRing.style.setProperty('--swipe-shadow-alpha', (0.18 + swipeProgress * 0.56).toFixed(3));
-      swipeRing.style.setProperty('--swipe-inner-alpha', (0.06 + swipeProgress * 0.26).toFixed(3));
-      swipeRing.style.setProperty('--swipe-halo-alpha', (0.12 + swipeProgress * 0.56).toFixed(3));
-      swipeRing.style.setProperty('--swipe-halo-soft', (0.08 + swipeProgress * 0.35).toFixed(3));
+      const swipeProgress = Math.min(1, Math.max(accumulatedX / navigateAt, Math.abs(deltaX) / 64));
+      swipeRing.style.setProperty('--swipe-opacity', (0.58 + swipeProgress * 0.42).toFixed(3));
+      swipeRing.style.setProperty('--swipe-scale', (0.88 + swipeProgress * 0.12).toFixed(3));
+      swipeRing.style.setProperty('--swipe-halo-alpha', (0.42 + swipeProgress * 0.5).toFixed(3));
+      swipeRing.style.setProperty('--swipe-halo-soft', (0.18 + swipeProgress * 0.34).toFixed(3));
       swipeRing.classList.add('is-visible');
       window.clearTimeout(resetTimer);
 
-      if (accumulatedX >= 110) {
+      if (accumulatedX >= navigateAt) {
         navigating = true;
         swipeRing.classList.add('is-committing');
         window.setTimeout(() => window.location.assign(destination.path), 400);
         return;
       }
-      resetTimer = window.setTimeout(resetSwipe, 520);
+      resetTimer = window.setTimeout(resetSwipe, 850);
+    };
+    window.addEventListener('wheel', (event) => {
+      if (navigating) {
+        if (Math.abs(event.deltaX) > Math.abs(event.deltaY) * 1.1) event.preventDefault();
+        return;
+      }
+      const deltaX = event.deltaX * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerWidth : 1);
+      const deltaY = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1);
+      if (Math.abs(deltaX) < 1 || Math.abs(deltaX) < Math.abs(deltaY) * 0.72) return;
+      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], [data-horizontal-scroll]')) return;
+      registerSwipeDelta(deltaX, event);
     }, { passive: false });
+
+    let touchStart = null;
+    let touchLast = null;
+    window.addEventListener('touchstart', (event) => {
+      if (event.touches.length !== 1) {
+        touchStart = touchLast = null;
+        return;
+      }
+      const touch = event.touches[0];
+      touchStart = { x: touch.clientX, y: touch.clientY };
+      touchLast = touchStart;
+    }, { passive: true });
+    window.addEventListener('touchmove', (event) => {
+      if (!touchStart || !touchLast || event.touches.length !== 1 || navigating) return;
+      const touch = event.touches[0];
+      const totalX = touchStart.x - touch.clientX;
+      const totalY = touchStart.y - touch.clientY;
+      if (Math.abs(totalX) < 12 || Math.abs(totalX) < Math.abs(totalY) * 1.12) return;
+      const deltaX = touchLast.x - touch.clientX;
+      touchLast = { x: touch.clientX, y: touch.clientY };
+      registerSwipeDelta(deltaX, event);
+    }, { passive: false });
+    const finishTouchSwipe = () => {
+      touchStart = touchLast = null;
+      if (!navigating && accumulatedX) resetTimer = window.setTimeout(resetSwipe, 850);
+    };
+    window.addEventListener('touchend', finishTouchSwipe, { passive: true });
+    window.addEventListener('touchcancel', finishTouchSwipe, { passive: true });
   }
   const revealItems = document.querySelectorAll('.reveal');
   if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
