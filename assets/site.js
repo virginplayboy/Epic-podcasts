@@ -200,6 +200,21 @@
   } else {
     revealItems.forEach((item) => item.classList.add('is-visible'));
   }
+  document.querySelectorAll('[data-youtube-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const videoId = button.dataset.youtubeId;
+      if (!videoId) return;
+      const player = document.createElement('iframe');
+      player.className = 'work-video-player';
+      player.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&controls=1&playsinline=1&rel=0`;
+      player.title = button.dataset.videoTitle || 'Selected work video';
+      player.loading = 'lazy';
+      player.referrerPolicy = 'strict-origin-when-cross-origin';
+      player.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+      player.allowFullscreen = true;
+      button.replaceWith(player);
+    }, { once: true });
+  });
   const filterButtons = document.querySelectorAll('[data-filter]');
   const projectCards = document.querySelectorAll('[data-category]');
   filterButtons.forEach((button) => {
