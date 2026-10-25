@@ -255,12 +255,12 @@
       const absX = Math.abs(deltaX);
       const absY = Math.abs(deltaY);
 
-      // Safari's back/forward trackpad gesture is driven by the same wheel
-      // stream. Cancel its native action on the first horizontal-dominant
-      // sample, before waiting for enough distance to switch our own page.
-      if (absX < 0.1 || absX < absY * 0.2) return;
+      // Let vertical and diagonal page scrolling reach the browser unchanged.
+      // Only claim a wheel stream once its horizontal intent is clear; Chrome
+      // and Safari use the same trackpad stream for native history gestures.
+      if (absX < 0.5 || absX < absY * 0.85) return;
       if (event.cancelable) event.preventDefault();
-      if (navigating || absX < 0.5 || absX < absY * 0.72) return;
+      if (navigating) return;
       registerSwipeDelta(deltaX);
     };
     document.addEventListener('wheel', onTrackpadWheel, { capture: true, passive: false });
