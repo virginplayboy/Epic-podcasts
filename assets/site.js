@@ -36,19 +36,90 @@
         || links.find((link) => link.getAttribute('aria-current') === 'page')
         || links[0];
 
-      const placeGlass = (link, spring = false) => {
+      // Critically damped spring: tuned to settle a typical 100 px nav move
+      // in about 380 ms at 120 Hz. These are not Apple's UIKit values.
+      const springOmega = 26;
+      const springPosition = { x: 0, y: 0, width: 0, height: 0 };
+      const springVelocity = { x: 0, y: 0, width: 0, height: 0 };
+      const springTarget = { x: 0, y: 0, width: 0, height: 0 };
+      const springKeys = ['x', 'y', 'width', 'height'];
+      let springFrame = 0;
+      let springTime = 0;
+      let glassPlaced = false;
+      const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+      const writeGlass = () => {
+        glass.style.width = `${springPosition.width}px`;
+        glass.style.height = `${springPosition.height}px`;
+        glass.style.transform = `translate3d(${springPosition.x}px,${springPosition.y}px,0)`;
+      };
+      const stopGlassSpring = () => {
+        if (springFrame) cancelAnimationFrame(springFrame);
+        springFrame = 0;
+        springTime = 0;
+      };
+      const settleGlassForReducedMotion = (event) => {
+        if (!event.matches) return;
+        stopGlassSpring();
+        springKeys.forEach((key) => {
+          springPosition[key] = springTarget[key];
+          springVelocity[key] = 0;
+        });
+        if (glassPlaced) writeGlass();
+      };
+      if (reducedMotion.addEventListener) reducedMotion.addEventListener('change', settleGlassForReducedMotion);
+      else reducedMotion.addListener(settleGlassForReducedMotion);
+      const animateGlass = (time) => {
+        const elapsed = Math.min((time - springTime) / 1000 || 0, 0.05);
+        springTime = time;
+        const steps = Math.max(1, Math.ceil(elapsed / (1 / 120)));
+        const step = elapsed / steps;
+        const stiffness = springOmega * springOmega;
+        const damping = 2 * springOmega;
+        for (let i = 0; i < steps; i += 1) {
+          springKeys.forEach((key) => {
+            const acceleration = stiffness * (springTarget[key] - springPosition[key]) - damping * springVelocity[key];
+            springVelocity[key] += acceleration * step;
+            springPosition[key] += springVelocity[key] * step;
+          });
+        }
+        const settled = springKeys.every((key) => Math.abs(springTarget[key] - springPosition[key]) < 0.5 && Math.abs(springVelocity[key]) < 4);
+        if (settled) {
+          springKeys.forEach((key) => {
+            springPosition[key] = springTarget[key];
+            springVelocity[key] = 0;
+          });
+          writeGlass();
+          springFrame = 0;
+          springTime = 0;
+          return;
+        }
+        writeGlass();
+        springFrame = requestAnimationFrame(animateGlass);
+      };
+      const placeGlass = (link, animate = false) => {
         if (!link || !menu.getClientRects().length) return;
         const menuRect = menu.getBoundingClientRect();
         const linkRect = link.getBoundingClientRect();
-        glass.style.left = `${linkRect.left - menuRect.left}px`;
-        glass.style.top = `${linkRect.top - menuRect.top}px`;
-        glass.style.width = `${linkRect.width}px`;
-        glass.style.height = `${linkRect.height}px`;
+        springTarget.x = linkRect.left - menuRect.left;
+        springTarget.y = linkRect.top - menuRect.top;
+        springTarget.width = linkRect.width;
+        springTarget.height = linkRect.height;
+        glass.style.left = '0px';
+        glass.style.top = '0px';
         links.forEach((item) => item.classList.toggle('is-glass-target', item === link));
-        if (spring) {
-          glass.classList.remove('is-springing');
-          void glass.offsetWidth;
-          glass.classList.add('is-springing');
+        if (!glassPlaced || !animate || reducedMotion.matches) {
+          stopGlassSpring();
+          springKeys.forEach((key) => {
+            springPosition[key] = springTarget[key];
+            springVelocity[key] = 0;
+          });
+          glassPlaced = true;
+          writeGlass();
+          return;
+        }
+        if (!springFrame) {
+          springTime = performance.now();
+          springFrame = requestAnimationFrame(animateGlass);
         }
       };
 
@@ -91,7 +162,7 @@
       menu.addEventListener('focusin', (event) => {
         const link = event.target.closest('a');
         if (link) {
-          placeGlass(link);
+          placeGlass(link, true);
           prefetchPage(link);
         }
       });
@@ -207,18 +278,35 @@
     let accumulatedX = 0;
     let activeDirection = 0;
     let resetTimer;
+    let navigationTimer = 0;
     let navigating = false;
-    const navigateAt = 54;
+    const swipeTuning = {
+      navigationDistance: 54,
+      wheelAxisRatio: 1.12,
+      touchAxisRatio: 1.12,
+      touchAxisLockDistance: 8,
+      touchNavigationDistance: 12,
+      idleResetMs: 320,
+      routeTransitionMs: 400
+    };
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
     const resetSwipe = () => {
       window.clearTimeout(resetTimer);
       accumulatedX = 0;
       activeDirection = 0;
+      swipeRing.classList.remove('is-committing');
       swipeRing.classList.remove('is-visible');
       swipeRing.classList.remove('from-left', 'from-right');
     };
     const registerSwipeDelta = (deltaX) => {
-      if (!deltaX || navigating) return;
+      if (!deltaX) return;
       const direction = deltaX > 0 ? 1 : -1;
+      if (navigating) {
+        if (direction === activeDirection) return;
+        window.clearTimeout(navigationTimer);
+        navigating = false;
+        resetSwipe();
+      }
       const destination = swipePages[currentPageIndex + direction];
       if (!destination) {
         resetSwipe();
@@ -232,7 +320,7 @@
         swipeRing.classList.add(direction > 0 ? 'from-right' : 'from-left');
       }
       accumulatedX += Math.abs(deltaX);
-      const swipeProgress = Math.min(1, Math.max(accumulatedX / navigateAt, Math.abs(deltaX) / 64));
+      const swipeProgress = Math.min(1, Math.max(accumulatedX / swipeTuning.navigationDistance, Math.abs(deltaX) / 64));
       swipeRing.style.setProperty('--swipe-opacity', (0.58 + swipeProgress * 0.42).toFixed(3));
       swipeRing.style.setProperty('--swipe-scale', (0.88 + swipeProgress * 0.12).toFixed(3));
       swipeRing.style.setProperty('--swipe-halo-alpha', (0.42 + swipeProgress * 0.5).toFixed(3));
@@ -240,13 +328,13 @@
       swipeRing.classList.add('is-visible');
       window.clearTimeout(resetTimer);
 
-      if (accumulatedX >= navigateAt) {
+      if (accumulatedX >= swipeTuning.navigationDistance) {
         navigating = true;
         swipeRing.classList.add('is-committing');
-        window.setTimeout(() => window.location.assign(destination.path), 400);
+        navigationTimer = window.setTimeout(() => window.location.assign(destination.path), reducedMotion.matches ? 0 : swipeTuning.routeTransitionMs);
         return;
       }
-      resetTimer = window.setTimeout(resetSwipe, 850);
+      resetTimer = window.setTimeout(resetSwipe, swipeTuning.idleResetMs);
     };
     const onTrackpadWheel = (event) => {
       const deltaX = event.deltaX * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerWidth : 1);
@@ -258,37 +346,46 @@
       // Let vertical and diagonal page scrolling reach the browser unchanged.
       // Only claim a wheel stream once its horizontal intent is clear; Chrome
       // and Safari use the same trackpad stream for native history gestures.
-      if (absX < 0.5 || absX < absY * 0.85) return;
+      if (absX < 0.5 || absX < absY * swipeTuning.wheelAxisRatio) return;
       if (event.cancelable) event.preventDefault();
-      if (navigating) return;
       registerSwipeDelta(deltaX);
     };
     document.addEventListener('wheel', onTrackpadWheel, { capture: true, passive: false });
 
     let touchStart = null;
     let touchLast = null;
+    let touchAxis = null;
     window.addEventListener('touchstart', (event) => {
       if (event.touches.length !== 1) {
-        touchStart = touchLast = null;
+        touchStart = touchLast = touchAxis = null;
         return;
       }
       const touch = event.touches[0];
       touchStart = { x: touch.clientX, y: touch.clientY };
       touchLast = touchStart;
+      touchAxis = null;
     }, { passive: true });
     window.addEventListener('touchmove', (event) => {
-      if (!touchStart || !touchLast || event.touches.length !== 1 || navigating) return;
+      if (!touchStart || !touchLast || event.touches.length !== 1) return;
       const touch = event.touches[0];
       const totalX = touchStart.x - touch.clientX;
       const totalY = touchStart.y - touch.clientY;
-      if (Math.abs(totalX) < 12 || Math.abs(totalX) < Math.abs(totalY) * 1.12) return;
+      const absX = Math.abs(totalX);
+      const absY = Math.abs(totalY);
+      if (!touchAxis && Math.max(absX, absY) >= swipeTuning.touchAxisLockDistance) {
+        if (absX >= absY * swipeTuning.touchAxisRatio) touchAxis = 'x';
+        else if (absY >= absX * swipeTuning.touchAxisRatio) touchAxis = 'y';
+      }
+      if (touchAxis !== 'x' || absX < swipeTuning.touchNavigationDistance) return;
+      if (event.cancelable) event.preventDefault();
       const deltaX = touchLast.x - touch.clientX;
       touchLast = { x: touch.clientX, y: touch.clientY };
-      registerSwipeDelta(deltaX, event);
+      registerSwipeDelta(deltaX);
     }, { passive: false });
     const finishTouchSwipe = () => {
       touchStart = touchLast = null;
-      if (!navigating && accumulatedX) resetTimer = window.setTimeout(resetSwipe, 850);
+      touchAxis = null;
+      if (!navigating && accumulatedX) resetTimer = window.setTimeout(resetSwipe, swipeTuning.idleResetMs);
     };
     window.addEventListener('touchend', finishTouchSwipe, { passive: true });
     window.addEventListener('touchcancel', finishTouchSwipe, { passive: true });
