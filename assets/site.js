@@ -280,9 +280,14 @@
     let resetTimer;
     let navigationTimer = 0;
     let navigating = false;
+    let wheelAxis = null;
+    let wheelTotalX = 0;
+    let wheelTotalY = 0;
+    let wheelResetTimer = 0;
     const swipeTuning = {
       navigationDistance: 54,
-      wheelAxisRatio: 1.12,
+      wheelAxisRatio: 1.08,
+      wheelAxisLockDistance: 6,
       touchAxisRatio: 1.12,
       touchAxisLockDistance: 8,
       touchNavigationDistance: 12,
@@ -342,11 +347,28 @@
       if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], [data-horizontal-scroll]')) return;
       const absX = Math.abs(deltaX);
       const absY = Math.abs(deltaY);
+      if (absX < 0.01 && absY < 0.01) return;
 
-      // Let vertical and diagonal page scrolling reach the browser unchanged.
-      // Only claim a wheel stream once its horizontal intent is clear; Chrome
-      // and Safari use the same trackpad stream for native history gestures.
-      if (absX < 0.5 || absX < absY * swipeTuning.wheelAxisRatio) return;
+      // Chrome often reports trackpad motion as a burst of tiny, slightly
+      // diagonal wheel deltas. Lock the gesture by its accumulated direction
+      // instead of rejecting each event independently. This keeps vertical
+      // page scrolling native while promptly claiming a deliberate horizontal
+      // swipe before the browser interprets it as Back/Forward navigation.
+      if (wheelAxis !== 'x') {
+        wheelTotalX += deltaX;
+        wheelTotalY += deltaY;
+        const totalX = Math.abs(wheelTotalX);
+        const totalY = Math.abs(wheelTotalY);
+        if (Math.max(totalX, totalY) >= swipeTuning.wheelAxisLockDistance) {
+          if (totalX >= totalY * swipeTuning.wheelAxisRatio) wheelAxis = 'x';
+        }
+      }
+      window.clearTimeout(wheelResetTimer);
+      wheelResetTimer = window.setTimeout(() => {
+        wheelAxis = null;
+        wheelTotalX = wheelTotalY = 0;
+      }, swipeTuning.idleResetMs);
+      if (wheelAxis !== 'x') return;
       if (event.cancelable) event.preventDefault();
       registerSwipeDelta(deltaX);
     };
